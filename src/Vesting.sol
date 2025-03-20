@@ -5,6 +5,7 @@ import { IERC20 } from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import { Ownable } from "@openzeppelin-contracts/access/Ownable.sol";
 import { ReentrancyGuard } from "@openzeppelin-contracts/utils/ReentrancyGuard.sol";
+import { Errors } from "./libraries/Errors.sol";
 
 contract Vesting is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -35,7 +36,7 @@ contract Vesting is Ownable, ReentrancyGuard {
      * @param initialOwner The owner of the contract
      */
     constructor(address _token, address initialOwner) Ownable(initialOwner) {
-        require(_token != address(0), "Token address cannot be zero");
+        if (_token == address(0)) revert Errors.ZeroAddress();
         token = IERC20(_token);
     }
 
@@ -56,18 +57,18 @@ contract Vesting is Ownable, ReentrancyGuard {
         uint256 _totalAmount,
         uint256[] calldata _unlockAmounts
     ) external nonReentrant {
-        require(_beneficiary != address(0), "Beneficiary cannot be zero address");
-        require(_periodDuration > 0, "Period duration must be greater than 0");
-        require(_totalPeriods > 0, "Total periods must be greater than 0");
-        require(_totalAmount > 0, "Total amount must be greater than 0");
-        require(_unlockAmounts.length == _totalPeriods, "Unlock amounts must match total periods");
-        require(!vestingSchedules[_beneficiary].initialized, "Vesting schedule already exists");
+        if (_beneficiary == address(0)) revert Errors.ZeroAddress();
+        if (_periodDuration == 0) revert Errors.ZeroPeriodDuration();
+        if (_totalPeriods == 0) revert Errors.ZeroTotalPeriods();
+        if (_totalAmount == 0) revert Errors.ZeroTotalAmount();
+        if (_unlockAmounts.length != _totalPeriods) revert Errors.UnlockAmountsMismatch();
+        if (vestingSchedules[_beneficiary].initialized) revert Errors.ScheduleAlreadyExists();
 
         uint256 totalUnlockAmount = 0;
         for (uint256 i = 0; i < _unlockAmounts.length; i++) {
             totalUnlockAmount += _unlockAmounts[i];
         }
-        require(totalUnlockAmount == _totalAmount, "Sum of unlock amounts must equal total amount");
+        if (totalUnlockAmount != _totalAmount) revert Errors.UnlockAmountsNotEqualTotal();
 
         // Transfer tokens from sender to this contract
         token.safeTransferFrom(msg.sender, address(this), _totalAmount);
@@ -124,10 +125,10 @@ contract Vesting is Ownable, ReentrancyGuard {
         address beneficiary = msg.sender;
         VestingSchedule storage schedule = vestingSchedules[beneficiary];
 
-        require(schedule.initialized, "No vesting schedule found");
+        if (!schedule.initialized) revert Errors.NoVestingScheduleFound();
 
         uint256 claimableAmount = calculateClaimableAmount(beneficiary);
-        require(claimableAmount > 0, "No tokens available to claim");
+        if (claimableAmount == 0) revert Errors.NoTokensAvailableToClaim();
 
         schedule.amountClaimed += claimableAmount;
 
