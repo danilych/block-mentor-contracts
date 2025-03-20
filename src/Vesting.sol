@@ -139,7 +139,6 @@ contract Vesting is Ownable, ReentrancyGuard {
     /**
      * @notice Returns the vesting schedule for a beneficiary
      * @param _beneficiary Address of the beneficiary
-     * @return The vesting schedule
      */
     function getVestingSchedule(address _beneficiary)
         external
