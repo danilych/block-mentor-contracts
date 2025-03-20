@@ -3,6 +3,9 @@ src = "src"
 out = "out"
 libs = ["lib", "dependencies"]
 
+[fmt]
+bracket_spacing = true
+
 [dependencies]
 forge-std = "1.9.6"
 
