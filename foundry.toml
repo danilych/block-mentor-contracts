@@ -8,5 +8,6 @@ bracket_spacing = true
 
 [dependencies]
 forge-std = "1.9.6"
+"@openzeppelin-contracts" = "5.3.0-rc.0"
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
