@@ -37,6 +37,11 @@ jobs:
           forge build --sizes
         id: build
 
+      - name: Run Soldeer install
+        run: |
+          forge soldeer install
+        id: soldeer
+
       - name: Run Forge tests
         run: |
           forge test -vvv
