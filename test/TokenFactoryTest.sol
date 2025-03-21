@@ -1,17 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.22;
 
-import { Test, console2 } from "forge-std/Test.sol";
 import { TokenFactory } from "../src/TokenFactory.sol";
 import { Token } from "../src/tokens/Token.sol";
-import { Errors } from "../src/libraries/Errors.sol";
+import { Actors } from "./utils/Actors.sol";
 
-contract TokenFactoryTest is Test {
+contract TokenFactoryTest is Actors {
     // Test state variables
     TokenFactory public tokenFactory;
-    address public owner;
-    address public user1;
-    address public user2;
 
     // Token parameters
     string constant TOKEN_NAME = "Test Token";
@@ -20,13 +16,8 @@ contract TokenFactoryTest is Test {
 
     // Setup the fixture that can be reused across tests
     function fixture() public {
-        // Setup addresses
-        owner = makeAddr("owner");
-        user1 = makeAddr("user1");
-        user2 = makeAddr("user2");
-
-        // Deploy the contract from the owner
-        vm.prank(owner);
+        // Deploy the contract from the deployer
+        vm.prank(deployer);
         tokenFactory = new TokenFactory();
     }
 

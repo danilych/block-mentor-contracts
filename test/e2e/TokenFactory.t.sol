@@ -11,13 +11,13 @@ import { TokenFactory } from "../../src/TokenFactory.sol";
 contract TokenFactoryE2ETest is TokenFactoryTest {
     // Test successful token creation
     function testCreateToken() public {
-        // Switch to user1 to create a token
-        vm.prank(user1);
+        // Switch to alice to create a token
+        vm.prank(alice);
         tokenFactory.createToken(TOKEN_NAME, TOKEN_TICKER, INITIAL_AMOUNT);
 
         // Find the created token using the emitted event
         vm.recordLogs();
-        vm.prank(user1);
+        vm.prank(alice);
         tokenFactory.createToken("Another Token", "ATK", INITIAL_AMOUNT);
 
         // Get the logs to find the token address
@@ -38,14 +38,14 @@ contract TokenFactoryE2ETest is TokenFactoryTest {
         Token token = Token(tokenAddress);
         assertEq(token.name(), "Another Token");
         assertEq(token.symbol(), "ATK");
-        assertEq(token.balanceOf(user1), INITIAL_AMOUNT);
+        assertEq(token.balanceOf(alice), INITIAL_AMOUNT);
     }
 
     // Test event emission
     function testTokenCreatedEvent() public {
         // First create a token and capture its address
         vm.recordLogs();
-        vm.prank(user1);
+        vm.prank(alice);
         tokenFactory.createToken(TOKEN_NAME, TOKEN_TICKER, INITIAL_AMOUNT);
 
         // Get the logs to verify the event was emitted correctly
@@ -56,7 +56,7 @@ contract TokenFactoryE2ETest is TokenFactoryTest {
         for (uint256 i = 0; i < entries.length; i++) {
             if (entries[i].topics[0] == tokenCreatedSig) {
                 // Check indexed parameters
-                assertEq(address(uint160(uint256(entries[i].topics[1]))), user1, "Event owner mismatch");
+                assertEq(address(uint160(uint256(entries[i].topics[1]))), alice, "Event owner mismatch");
 
                 // Token address is dynamic, so we can't check it directly
                 // But we can check it's not zero
@@ -74,21 +74,21 @@ contract TokenFactoryE2ETest is TokenFactoryTest {
 
     // Test validation: Invalid name
     function testRevertWhenInvalidName() public {
-        vm.prank(user1);
+        vm.prank(alice);
         vm.expectRevert(Errors.InvalidTokenName.selector);
         tokenFactory.createToken("", TOKEN_TICKER, INITIAL_AMOUNT);
     }
 
     // Test validation: Invalid ticker
     function testRevertWhenInvalidTicker() public {
-        vm.prank(user1);
+        vm.prank(alice);
         vm.expectRevert(Errors.InvalidTokenTicker.selector);
         tokenFactory.createToken(TOKEN_NAME, "", INITIAL_AMOUNT);
     }
 
     // Test validation: Invalid initial amount
     function testRevertWhenInvalidAmount() public {
-        vm.prank(user1);
+        vm.prank(alice);
         vm.expectRevert(Errors.InvalidInitialAmount.selector);
         tokenFactory.createToken(TOKEN_NAME, TOKEN_TICKER, 0);
     }
@@ -96,17 +96,17 @@ contract TokenFactoryE2ETest is TokenFactoryTest {
     // Test multiple token creations
     function testMultipleTokensForSameUser() public {
         // Create first token
-        vm.prank(user1);
-        tokenFactory.createToken("First Token", "FTK", INITIAL_AMOUNT);
+        vm.prank(alice);
+        tokenFactory.createToken("Alice's First Token", "AFT", INITIAL_AMOUNT);
 
         // Create second token
-        vm.prank(user1);
-        tokenFactory.createToken("Second Token", "STK", INITIAL_AMOUNT * 2);
+        vm.prank(alice);
+        tokenFactory.createToken("Alice's Second Token", "AST", INITIAL_AMOUNT * 2);
 
         // Record logs to get addresses
         vm.recordLogs();
-        vm.prank(user1);
-        tokenFactory.createToken("Final Token", "FNL", INITIAL_AMOUNT / 2);
+        vm.prank(alice);
+        tokenFactory.createToken("Alice's Final Token", "AFLT", INITIAL_AMOUNT / 2);
 
         Vm.Log[] memory entries = vm.getRecordedLogs();
         bytes32 tokenCreatedSig = keccak256("TokenCreated(address,address,string,string,uint256)");
@@ -121,20 +121,20 @@ contract TokenFactoryE2ETest is TokenFactoryTest {
 
         // Verify the last token
         Token finalToken = Token(finalTokenAddress);
-        assertEq(finalToken.name(), "Final Token");
-        assertEq(finalToken.symbol(), "FNL");
-        assertEq(finalToken.balanceOf(user1), INITIAL_AMOUNT / 2);
+        assertEq(finalToken.name(), "Alice's Final Token");
+        assertEq(finalToken.symbol(), "AFLT");
+        assertEq(finalToken.balanceOf(alice), INITIAL_AMOUNT / 2);
     }
 
     // Test token creation from different users
     function testTokenCreationFromDifferentUsers() public {
-        // User1 creates a token
-        vm.prank(user1);
-        tokenFactory.createToken("User1 Token", "U1T", INITIAL_AMOUNT);
+        // Alice creates a token
+        vm.prank(alice);
+        tokenFactory.createToken("Alice Token", "ALC", INITIAL_AMOUNT);
 
-        // User2 creates a token
-        vm.prank(user2);
-        tokenFactory.createToken("User2 Token", "U2T", INITIAL_AMOUNT * 3);
+        // Bob creates a token
+        vm.prank(bob);
+        tokenFactory.createToken("Bob Token", "BOB", INITIAL_AMOUNT * 3);
 
         // For this test, we don't need to verify the actual token instances
         // since we're mainly testing that different users can create tokens
@@ -143,7 +143,7 @@ contract TokenFactoryE2ETest is TokenFactoryTest {
     // Test ownership (if relevant to your contract)
     function testOwnership() public view {
         // Verify the owner
-        assertEq(tokenFactory.owner(), owner);
+        assertEq(tokenFactory.owner(), deployer);
 
         // Only needed if your contract has owner-specific functionality
     }
@@ -152,7 +152,7 @@ contract TokenFactoryE2ETest is TokenFactoryTest {
     function testGasUsageForTokenCreation() public {
         uint256 startGas = gasleft();
 
-        vm.prank(user1);
+        vm.prank(alice);
         tokenFactory.createToken(TOKEN_NAME, TOKEN_TICKER, INITIAL_AMOUNT);
 
         uint256 gasUsed = startGas - gasleft();
