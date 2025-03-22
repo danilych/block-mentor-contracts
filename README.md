@@ -8,6 +8,18 @@ Foundry consists of:
 -   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
 -   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
 -   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+  
+## Deployments
+
+### OmnichainToken
+
+-   **Network**: Arbitrum Sepolia
+-   **Address**: `0x24260d046005f74aCa953e3aA00028DEFadABdC7`
+  
+
+-   **Network**: Base Sepolia
+-   **Address**: `0xbd39A7fAbBc9D92df06d93B226C62EA820CCf325`
+
 
 ## Documentation
 

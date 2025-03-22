@@ -9,5 +9,10 @@ bracket_spacing = true
 [dependencies]
 forge-std = "1.9.6"
 "@openzeppelin-contracts" = "5.3.0-rc.0"
+ViaLabs-contracts = { version = "1.0", git = "https://github.com/VIALabs-io/npm-contracts.git", rev = "19c03e5f6808ccdc0ba2f8fc3c5aca0a3220fea9" }
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+
+[rpc_endpoints]
+arbitrum-sepolia = "https://arb-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
+base-sepolia = "https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}"
