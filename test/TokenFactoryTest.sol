@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.22;
+pragma solidity ^0.8.22;
 
 import { TokenFactory } from "../src/TokenFactory.sol";
 import { Token } from "../src/tokens/Token.sol";
@@ -19,10 +19,5 @@ contract TokenFactoryTest is Actors {
         // Deploy the contract from the deployer
         vm.prank(deployer);
         tokenFactory = new TokenFactory();
-    }
-
-    // Run the fixture before each test
-    function setUp() public {
-        fixture();
     }
 }

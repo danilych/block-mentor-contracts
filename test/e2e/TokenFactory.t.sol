@@ -9,6 +9,10 @@ import { console2 } from "forge-std/console2.sol";
 import { TokenFactory } from "../../src/TokenFactory.sol";
 
 contract TokenFactoryE2ETest is TokenFactoryTest {
+    function setUp() public {
+        fixture();
+    }
+
     // Test successful token creation
     function testCreateToken() public {
         // Switch to alice to create a token
