@@ -57,9 +57,9 @@ contract VestingFactoryE2ETest is VestingFactoryTest {
         // Ensure total amount is divisible by the number of periods
         uint256 divisibleAmount = TOTAL_PERIODS * (TOTAL_AMOUNT / TOTAL_PERIODS);
 
-        // First, transfer tokens from Alice to the factory
+        // Approve tokens for the factory to transfer
         vm.startPrank(alice);
-        token.transfer(address(vestingFactory), divisibleAmount);
+        token.approve(address(vestingFactory), divisibleAmount);
 
         // Now create the vesting contract with schedule
         address vestingAddress = vestingFactory.createVestingContractWithSchedule(
@@ -154,7 +154,7 @@ contract VestingFactoryE2ETest is VestingFactoryTest {
         uint256 divisibleAmount = TOTAL_PERIODS * (TOTAL_AMOUNT / TOTAL_PERIODS);
 
         vm.startPrank(alice);
-        token.transfer(address(vestingFactory), divisibleAmount);
+        token.approve(address(vestingFactory), divisibleAmount);
 
         // Test with zero address for beneficiary
         vm.expectRevert(Errors.ZeroAddress.selector);

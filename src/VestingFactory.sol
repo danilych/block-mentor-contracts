@@ -4,11 +4,14 @@ pragma solidity 0.8.22;
 import { Ownable } from "@openzeppelin-contracts/access/Ownable.sol";
 import { IERC20 } from "@openzeppelin-contracts/token/ERC20/IERC20.sol";
 import { IERC20Metadata } from "@openzeppelin-contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import { SafeERC20 } from "@openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 import { Vesting } from "./Vesting.sol";
 import { Errors } from "./libraries/Errors.sol";
 
 contract VestingFactory is Ownable {
+    using SafeERC20 for IERC20;
+
     event VestingContractCreated(address indexed owner, address indexed vestingContract, address indexed token);
     event VestingScheduleCreated(
         address indexed vestingContract,
@@ -70,7 +73,8 @@ contract VestingFactory is Ownable {
         address vestingContractAddress = createVestingContract(_token);
         Vesting vestingContract = Vesting(vestingContractAddress);
 
-        // Approve tokens for transfer
+        // Transfer tokens directly from caller to the vesting contract
+        IERC20(_token).safeTransferFrom(msg.sender, address(this), _totalAmount);
         IERC20(_token).approve(vestingContractAddress, _totalAmount);
 
         // Create the vesting schedule
