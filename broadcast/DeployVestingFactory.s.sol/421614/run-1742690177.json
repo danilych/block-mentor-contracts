@@ -1,7 +1,7 @@
 {
   "transactions": [
     {
-      "hash": "0x76de512f1b8ddc11c3f2ba6a01f284c1683ba341d4119dae237392cf1996b0e5",
+      "hash": null,
       "transactionType": "CREATE",
       "contractName": "VestingFactory",
       "contractAddress": "0xf54a3b56e19c99e910a3f02232a8cd225ce007c8",
@@ -19,47 +19,11 @@
       "isFixedGasLimit": false
     }
   ],
-  "receipts": [
-    {
-      "status": "0x1",
-      "cumulativeGasUsed": "0x28000a",
-      "logs": [
-        {
-          "address": "0xf54a3b56e19c99e910a3f02232a8cd225ce007c8",
-          "topics": [
-            "0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0",
-            "0x0000000000000000000000000000000000000000000000000000000000000000",
-            "0x00000000000000000000000025fbb765998134400f6e2d4191e89c37db40fa98"
-          ],
-          "data": "0x",
-          "blockHash": "0x38f8e8a9a507ca2ead78b38be3567afd97bdb3c96b7c250ce4153208f387abf8",
-          "blockNumber": "0x80ad965",
-          "transactionHash": "0x76de512f1b8ddc11c3f2ba6a01f284c1683ba341d4119dae237392cf1996b0e5",
-          "transactionIndex": "0x1",
-          "logIndex": "0x0",
-          "removed": false
-        }
-      ],
-      "logsBloom": "0x00000000000000000000000000000000000000000002000000800000000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000020000000000000000000800000000000000000000000000000000400000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000040000000000000000000000000000008000000020000000000000000000000000000000000000000000000000000000000000000000",
-      "type": "0x2",
-      "transactionHash": "0x76de512f1b8ddc11c3f2ba6a01f284c1683ba341d4119dae237392cf1996b0e5",
-      "transactionIndex": "0x1",
-      "blockHash": "0x38f8e8a9a507ca2ead78b38be3567afd97bdb3c96b7c250ce4153208f387abf8",
-      "blockNumber": "0x80ad965",
-      "gasUsed": "0x28000a",
-      "effectiveGasPrice": "0x5f5e100",
-      "from": "0x25fbb765998134400f6e2d4191e89c37db40fa98",
-      "to": null,
-      "contractAddress": "0xf54a3b56e19c99e910a3f02232a8cd225ce007c8",
-      "gasUsedForL1": "0x0",
-      "l1BlockNumber": "0x7976b1",
-      "timeboosted": false
-    }
-  ],
+  "receipts": [],
   "libraries": [],
   "pending": [],
   "returns": {},
-  "timestamp": 1742690213,
+  "timestamp": 1742690177,
   "chain": 421614,
   "commit": "6321b21"
 }
