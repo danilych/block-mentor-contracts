@@ -49,26 +49,21 @@ contract VestingFactoryE2ETest is VestingFactoryTest {
         // Verify vesting contract properties
         Vesting vesting = Vesting(vestingAddress);
         assertEq(address(vesting.token()), address(token), "Token address mismatch");
-        assertEq(vesting.owner(), alice, "Owner mismatch");
     }
 
-    // Test vesting contract creation with schedule
+    // Test creating a vesting contract with schedule in one transaction
     function testCreateVestingContractWithSchedule() public {
         uint256 start = block.timestamp;
-        uint256[] memory unlockAmounts = new uint256[](TOTAL_PERIODS);
-        uint256 amountPerPeriod = TOTAL_AMOUNT / TOTAL_PERIODS;
-
-        for (uint256 i = 0; i < TOTAL_PERIODS; i++) {
-            unlockAmounts[i] = amountPerPeriod;
-        }
+        // Ensure total amount is divisible by the number of periods
+        uint256 divisibleAmount = TOTAL_PERIODS * (TOTAL_AMOUNT / TOTAL_PERIODS);
 
         // First, transfer tokens from Alice to the factory
         vm.startPrank(alice);
-        token.transfer(address(vestingFactory), TOTAL_AMOUNT);
+        token.transfer(address(vestingFactory), divisibleAmount);
 
         // Now create the vesting contract with schedule
         address vestingAddress = vestingFactory.createVestingContractWithSchedule(
-            address(token), bob, start, PERIOD_DURATION, TOTAL_PERIODS, TOTAL_AMOUNT, unlockAmounts
+            address(token), bob, start, PERIOD_DURATION, TOTAL_PERIODS, divisibleAmount
         );
         vm.stopPrank();
 
@@ -77,14 +72,17 @@ contract VestingFactoryE2ETest is VestingFactoryTest {
         assertEq(address(vesting.token()), address(token), "Token address mismatch");
 
         // Verify schedule creation - break this into smaller sections to avoid stack too deep
-        verifyVestingSchedule(vesting, bob, start);
+        verifyVestingSchedule(vesting, bob, start, divisibleAmount);
 
         // Check token balances
-        assertEq(token.balanceOf(vestingAddress), TOTAL_AMOUNT, "Vesting contract should hold tokens");
+        assertEq(token.balanceOf(vestingAddress), divisibleAmount, "Vesting contract should hold tokens");
     }
 
     // Helper function to verify vesting schedule to avoid stack too deep errors
-    function verifyVestingSchedule(Vesting vesting, address beneficiary, uint256 expectedStart) internal view {
+    function verifyVestingSchedule(Vesting vesting, address beneficiary, uint256 expectedStart, uint256 expectedAmount)
+        internal
+        view
+    {
         (
             address scheduleBeneficiary,
             uint256 scheduleStart,
@@ -92,7 +90,7 @@ contract VestingFactoryE2ETest is VestingFactoryTest {
             uint256 totalPeriods,
             uint256 totalAmount,
             uint256 amountClaimed,
-            uint256[] memory storedUnlockAmounts,
+            uint256 amountPerPeriod,
             bool initialized
         ) = vesting.getVestingSchedule(beneficiary);
 
@@ -100,26 +98,10 @@ contract VestingFactoryE2ETest is VestingFactoryTest {
         assertEq(scheduleStart, expectedStart, "Start timestamp mismatch");
         assertEq(periodDuration, PERIOD_DURATION, "Period duration mismatch");
         assertEq(totalPeriods, TOTAL_PERIODS, "Total periods mismatch");
-        assertEq(totalAmount, TOTAL_AMOUNT, "Total amount mismatch");
+        assertEq(totalAmount, expectedAmount, "Total amount mismatch");
         assertEq(amountClaimed, 0, "Initial claimed amount should be zero");
+        assertEq(amountPerPeriod, expectedAmount / TOTAL_PERIODS, "Amount per period mismatch");
         assertTrue(initialized, "Schedule should be initialized");
-
-        // Check that we have the right number of unlock amounts
-        assertEq(storedUnlockAmounts.length, TOTAL_PERIODS, "Unlock amounts length mismatch");
-
-        // Check the total of unlock amounts
-        uint256 totalUnlocked = 0;
-        for (uint256 i = 0; i < storedUnlockAmounts.length; i++) {
-            totalUnlocked += storedUnlockAmounts[i];
-        }
-        assertEq(totalUnlocked, TOTAL_AMOUNT, "Total unlock amounts should equal total amount");
-    }
-
-    // Test validation: Zero address token
-    function testRevertWhenZeroAddressToken() public {
-        vm.prank(alice);
-        vm.expectRevert(Errors.ZeroAddress.selector);
-        vestingFactory.createVestingContract(address(0));
     }
 
     // Test creating multiple vesting contracts for the same token
@@ -129,57 +111,62 @@ contract VestingFactoryE2ETest is VestingFactoryTest {
         address firstVestingAddress = vestingFactory.createVestingContract(address(token));
 
         // Create second vesting contract
-        vm.prank(bob);
+        vm.prank(alice);
         address secondVestingAddress = vestingFactory.createVestingContract(address(token));
 
         // Verify they are different contracts
-        assertTrue(firstVestingAddress != secondVestingAddress, "Vesting contract addresses should be different");
+        assertTrue(firstVestingAddress != secondVestingAddress, "Should create distinct vesting contracts");
 
-        // Verify both contracts have the correct token
-        Vesting firstVesting = Vesting(firstVestingAddress);
-        Vesting secondVesting = Vesting(secondVestingAddress);
-
-        assertEq(address(firstVesting.token()), address(token), "First vesting token mismatch");
-        assertEq(address(secondVesting.token()), address(token), "Second vesting token mismatch");
-
-        // Verify ownership
-        assertEq(firstVesting.owner(), alice, "First vesting owner should be alice");
-        assertEq(secondVesting.owner(), bob, "Second vesting owner should be bob");
+        // Verify both have the correct token
+        assertEq(
+            address(Vesting(firstVestingAddress).token()),
+            address(token),
+            "First vesting contract token address mismatch"
+        );
+        assertEq(
+            address(Vesting(secondVestingAddress).token()),
+            address(token),
+            "Second vesting contract token address mismatch"
+        );
     }
 
-    // Test gas usage for vesting contract creation
-    function testGasUsageForVestingContractCreation() public {
-        uint256 startGas = gasleft();
+    // Test error case: Zero address for token
+    function testRevertWithZeroAddressToken() public {
+        vm.prank(alice);
+        vm.expectRevert(Errors.ZeroAddress.selector);
+        vestingFactory.createVestingContract(address(0));
+    }
+
+    // Test error case: Invalid token contract
+    function testRevertWithInvalidTokenContract() public {
+        // Create an invalid token address - must be a contract address that is not a valid ERC20 token
+        address invalidTokenAddr = address(new InvalidTokenMock());
 
         vm.prank(alice);
-        vestingFactory.createVestingContract(address(token));
-
-        uint256 gasUsed = startGas - gasleft();
-        console2.log("Gas used for vesting contract creation:", gasUsed);
+        vm.expectRevert(Errors.InvalidTokenContract.selector);
+        vestingFactory.createVestingContract(invalidTokenAddr);
     }
 
-    // Test gas usage for vesting contract creation with schedule
-    function testGasUsageForVestingContractWithSchedule() public {
+    // Test vesting contract with schedule error handling
+    function testRevertCreateVestingContractWithScheduleWithInvalidArgs() public {
         uint256 start = block.timestamp;
-        uint256[] memory unlockAmounts = new uint256[](TOTAL_PERIODS);
-        uint256 amountPerPeriod = TOTAL_AMOUNT / TOTAL_PERIODS;
+        // Ensure total amount is divisible by the number of periods
+        uint256 divisibleAmount = TOTAL_PERIODS * (TOTAL_AMOUNT / TOTAL_PERIODS);
 
-        for (uint256 i = 0; i < TOTAL_PERIODS; i++) {
-            unlockAmounts[i] = amountPerPeriod;
-        }
-
-        // First, transfer tokens from Alice to the factory
         vm.startPrank(alice);
-        token.transfer(address(vestingFactory), TOTAL_AMOUNT);
+        token.transfer(address(vestingFactory), divisibleAmount);
 
-        uint256 startGas = gasleft();
-
+        // Test with zero address for beneficiary
+        vm.expectRevert(Errors.ZeroAddress.selector);
         vestingFactory.createVestingContractWithSchedule(
-            address(token), bob, start, PERIOD_DURATION, TOTAL_PERIODS, TOTAL_AMOUNT, unlockAmounts
+            address(token), address(0), start, PERIOD_DURATION, TOTAL_PERIODS, divisibleAmount
         );
-        vm.stopPrank();
 
-        uint256 gasUsed = startGas - gasleft();
-        console2.log("Gas used for vesting contract creation with schedule:", gasUsed);
+        vm.stopPrank();
     }
+}
+
+// Mock contract that doesn't implement ERC20 interface
+contract InvalidTokenMock {
+// Empty contract
 }

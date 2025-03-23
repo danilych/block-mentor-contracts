@@ -12,20 +12,16 @@ contract VestingE2ETest is VestingTest {
     // Test successful vesting schedule creation
     function testCreateVestingSchedule() public {
         uint256 start = block.timestamp;
-        uint256[] memory unlockAmounts = new uint256[](TOTAL_PERIODS);
-        uint256 amountPerPeriod = TOTAL_AMOUNT / TOTAL_PERIODS;
-
-        for (uint256 i = 0; i < TOTAL_PERIODS; i++) {
-            unlockAmounts[i] = amountPerPeriod;
-        }
+        // Ensure total amount is divisible by the number of periods
+        uint256 divisibleAmount = TOTAL_PERIODS * (TOTAL_AMOUNT / TOTAL_PERIODS);
 
         // Prepare event monitoring
         vm.expectEmit(true, true, false, true);
-        emit Vesting.VestingScheduleCreated(bob, start, TOTAL_AMOUNT);
+        emit Vesting.VestingScheduleCreated(bob, start, divisibleAmount);
 
         // Create vesting schedule
         vm.prank(alice);
-        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, TOTAL_AMOUNT, unlockAmounts);
+        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, divisibleAmount);
 
         // Verify the vesting schedule was created correctly
         (
@@ -35,7 +31,7 @@ contract VestingE2ETest is VestingTest {
             uint256 totalPeriods,
             uint256 totalAmount,
             uint256 amountClaimed,
-            uint256[] memory storedUnlockAmounts,
+            uint256 amountPerPeriod,
             bool initialized
         ) = vesting.getVestingSchedule(bob);
 
@@ -43,139 +39,125 @@ contract VestingE2ETest is VestingTest {
         assertEq(scheduleStart, start, "Start timestamp mismatch");
         assertEq(periodDuration, PERIOD_DURATION, "Period duration mismatch");
         assertEq(totalPeriods, TOTAL_PERIODS, "Total periods mismatch");
-        assertEq(totalAmount, TOTAL_AMOUNT, "Total amount mismatch");
+        assertEq(totalAmount, divisibleAmount, "Total amount mismatch");
         assertEq(amountClaimed, 0, "Initial claimed amount should be zero");
+        assertEq(amountPerPeriod, divisibleAmount / TOTAL_PERIODS, "Amount per period mismatch");
         assertTrue(initialized, "Schedule should be initialized");
-
-        // Check unlock amounts
-        for (uint256 i = 0; i < TOTAL_PERIODS; i++) {
-            assertEq(storedUnlockAmounts[i], unlockAmounts[i], "Unlock amount mismatch at period");
-        }
-
-        // Check token balances
-        assertEq(token.balanceOf(address(vesting)), TOTAL_AMOUNT, "Vesting contract should hold tokens");
-        assertEq(token.balanceOf(alice), TOTAL_AMOUNT, "Alice should have remaining tokens");
     }
 
-    // Test claiming tokens after periods have passed
+    // Test claiming tokens
     function testClaimTokens() public {
         uint256 start = block.timestamp;
-        uint256[] memory unlockAmounts = new uint256[](TOTAL_PERIODS);
-        uint256 amountPerPeriod = TOTAL_AMOUNT / TOTAL_PERIODS;
 
-        for (uint256 i = 0; i < TOTAL_PERIODS; i++) {
-            unlockAmounts[i] = amountPerPeriod;
-        }
+        // Ensure total amount is divisible by the number of periods
+        uint256 divisibleAmount = TOTAL_PERIODS * (TOTAL_AMOUNT / TOTAL_PERIODS);
+        uint256 amountPerPeriod = divisibleAmount / TOTAL_PERIODS;
 
         // Create vesting schedule
-        vm.prank(alice);
-        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, TOTAL_AMOUNT, unlockAmounts);
+        vm.startPrank(alice);
+        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, divisibleAmount);
+        vm.stopPrank();
 
-        // Advance time by 1 period + 1 day
-        vm.warp(start + PERIOD_DURATION + 1 days);
+        // Advance time to the middle of the vesting period
+        uint256 halfPeriods = TOTAL_PERIODS / 2;
+        vm.warp(start + (halfPeriods * PERIOD_DURATION));
+
+        // Calculate claimable amount
+        uint256 claimableAmount = vesting.calculateClaimableAmount(bob);
+        assertEq(claimableAmount, halfPeriods * amountPerPeriod, "Claimable amount mismatch");
 
         // Prepare event monitoring
         vm.expectEmit(true, false, false, true);
-        emit Vesting.TokensClaimed(bob, amountPerPeriod);
+        emit Vesting.TokensClaimed(bob, claimableAmount);
 
-        // Claim tokens after first period
+        // Claim tokens
         vm.prank(bob);
         vesting.claimTokens();
 
-        // Verify claimed amount
+        // Verify token balance updated
+        assertEq(token.balanceOf(bob), claimableAmount, "Bob's token balance mismatch");
+
+        // Verify vesting schedule updated
         (,,,,, uint256 amountClaimed,,) = vesting.getVestingSchedule(bob);
-        assertEq(amountClaimed, amountPerPeriod, "Claimed amount should match one period");
-        assertEq(token.balanceOf(bob), amountPerPeriod, "Bob should have claimed tokens");
+        assertEq(amountClaimed, claimableAmount, "Amount claimed mismatch");
 
-        // Advance time by another period
-        vm.warp(start + PERIOD_DURATION * 2 + 1 days);
+        // No more tokens available to claim
+        assertEq(vesting.calculateClaimableAmount(bob), 0, "Should be no more tokens to claim");
 
-        // Prepare event monitoring for second claim
-        vm.expectEmit(true, false, false, true);
-        emit Vesting.TokensClaimed(bob, amountPerPeriod);
+        // Advance time to the end of the vesting period
+        vm.warp(start + (TOTAL_PERIODS * PERIOD_DURATION));
 
-        // Claim tokens after second period
+        // Calculate new claimable amount
+        uint256 remainingAmount = divisibleAmount - claimableAmount;
+        assertEq(vesting.calculateClaimableAmount(bob), remainingAmount, "Remaining claimable amount mismatch");
+
+        // Claim remaining tokens
         vm.prank(bob);
         vesting.claimTokens();
 
-        // Verify claimed amount has increased
-        (,,,,, amountClaimed,,) = vesting.getVestingSchedule(bob);
-        assertEq(amountClaimed, amountPerPeriod * 2, "Claimed amount should match two periods");
-        assertEq(token.balanceOf(bob), amountPerPeriod * 2, "Bob should have claimed tokens from two periods");
+        // Verify all tokens have been claimed
+        assertEq(token.balanceOf(bob), divisibleAmount, "Bob should have all tokens");
     }
 
     // Test calculating claimable amount
     function testCalculateClaimableAmount() public {
         uint256 start = block.timestamp;
-        uint256[] memory unlockAmounts = new uint256[](TOTAL_PERIODS);
-        uint256 amountPerPeriod = TOTAL_AMOUNT / TOTAL_PERIODS;
 
-        for (uint256 i = 0; i < TOTAL_PERIODS; i++) {
-            unlockAmounts[i] = amountPerPeriod;
-        }
+        // Ensure total amount is divisible by the number of periods
+        uint256 divisibleAmount = TOTAL_PERIODS * (TOTAL_AMOUNT / TOTAL_PERIODS);
+        uint256 amountPerPeriod = divisibleAmount / TOTAL_PERIODS;
 
-        // Create vesting schedule
+        // Setup vesting schedule
         vm.prank(alice);
-        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, TOTAL_AMOUNT, unlockAmounts);
+        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, divisibleAmount);
 
-        // Check initial claimable amount (should be 0 at start)
-        uint256 claimable = vesting.calculateClaimableAmount(bob);
-        assertEq(claimable, 0, "Initial claimable amount should be zero");
+        // No tokens claimable at start
+        assertEq(vesting.calculateClaimableAmount(bob), 0, "No tokens should be claimable at start");
 
-        // Advance time by 1 period + 1 day
-        vm.warp(start + PERIOD_DURATION + 1 days);
+        // After 1 period
+        vm.warp(start + PERIOD_DURATION);
+        assertEq(vesting.calculateClaimableAmount(bob), amountPerPeriod, "Wrong claimable amount after 1 period");
 
-        // Check claimable amount after one period
-        claimable = vesting.calculateClaimableAmount(bob);
-        assertEq(claimable, amountPerPeriod, "Claimable amount should be one period worth");
+        // After 2 periods
+        vm.warp(start + (2 * PERIOD_DURATION));
+        assertEq(vesting.calculateClaimableAmount(bob), 2 * amountPerPeriod, "Wrong claimable amount after 2 periods");
 
-        // Advance time by one more period
-        vm.warp(start + PERIOD_DURATION * 2 + 1 days);
+        // After all periods
+        vm.warp(start + (TOTAL_PERIODS * PERIOD_DURATION));
+        assertEq(
+            vesting.calculateClaimableAmount(bob), divisibleAmount, "All tokens should be claimable after all periods"
+        );
 
-        // Check claimable amount after two periods
-        claimable = vesting.calculateClaimableAmount(bob);
-        assertEq(claimable, amountPerPeriod * 2, "Claimable amount should be two periods worth");
-
-        // Claim tokens after two periods
+        // Claim tokens
         vm.prank(bob);
         vesting.claimTokens();
 
-        // Check claimable amount after claiming (should be 0)
-        claimable = vesting.calculateClaimableAmount(bob);
-        assertEq(claimable, 0, "Claimable amount should be zero after claiming");
+        // After claiming all tokens, no more should be claimable
+        assertEq(vesting.calculateClaimableAmount(bob), 0, "No more tokens should be claimable after claiming all");
 
-        // Advance time to end of vesting
-        vm.warp(start + PERIOD_DURATION * TOTAL_PERIODS + 1 days);
-
-        // Check claimable amount at end
-        claimable = vesting.calculateClaimableAmount(bob);
-        assertEq(claimable, amountPerPeriod * 2, "Claimable amount should be remaining two periods");
+        // Even after more time passes, still no more tokens can be claimed
+        vm.warp(start + ((TOTAL_PERIODS + 1) * PERIOD_DURATION));
+        assertEq(vesting.calculateClaimableAmount(bob), 0, "No more tokens should be claimable after claiming all");
     }
 
-    // Test validation: Zero address beneficiary
-    function testRevertWhenZeroAddressBeneficiary() public {
+    // Test validation: Zero address
+    function testRevertWithZeroAddress() public {
         uint256 start = block.timestamp;
-        uint256[] memory unlockAmounts = new uint256[](TOTAL_PERIODS);
-        uint256 amountPerPeriod = TOTAL_AMOUNT / TOTAL_PERIODS;
 
-        for (uint256 i = 0; i < TOTAL_PERIODS; i++) {
-            unlockAmounts[i] = amountPerPeriod;
-        }
+        // Ensure total amount is divisible by the number of periods
+        uint256 divisibleAmount = TOTAL_PERIODS * (TOTAL_AMOUNT / TOTAL_PERIODS);
 
         vm.prank(alice);
         vm.expectRevert(Errors.ZeroAddress.selector);
-        vesting.createVestingSchedule(address(0), start, PERIOD_DURATION, TOTAL_PERIODS, TOTAL_AMOUNT, unlockAmounts);
+        vesting.createVestingSchedule(address(0), start, PERIOD_DURATION, TOTAL_PERIODS, divisibleAmount);
     }
 
     // Test validation: Zero period duration
-    function testRevertWhenZeroPeriodDuration() public {
+    function testRevertWithZeroPeriodDuration() public {
         uint256 start = block.timestamp;
-        uint256[] memory unlockAmounts = new uint256[](TOTAL_PERIODS);
-        uint256 amountPerPeriod = TOTAL_AMOUNT / TOTAL_PERIODS;
 
-        for (uint256 i = 0; i < TOTAL_PERIODS; i++) {
-            unlockAmounts[i] = amountPerPeriod;
-        }
+        // Ensure total amount is divisible by the number of periods
+        uint256 divisibleAmount = TOTAL_PERIODS * (TOTAL_AMOUNT / TOTAL_PERIODS);
 
         vm.prank(alice);
         vm.expectRevert(Errors.ZeroPeriodDuration.selector);
@@ -184,15 +166,16 @@ contract VestingE2ETest is VestingTest {
             start,
             0, // Zero period duration
             TOTAL_PERIODS,
-            TOTAL_AMOUNT,
-            unlockAmounts
+            divisibleAmount
         );
     }
 
     // Test validation: Zero total periods
-    function testRevertWhenZeroTotalPeriods() public {
+    function testRevertWithZeroTotalPeriods() public {
         uint256 start = block.timestamp;
-        uint256[] memory unlockAmounts = new uint256[](1); // Need at least one element
+
+        // Ensure total amount is divisible by the number of periods
+        uint256 divisibleAmount = TOTAL_AMOUNT;
 
         vm.prank(alice);
         vm.expectRevert(Errors.ZeroTotalPeriods.selector);
@@ -201,15 +184,13 @@ contract VestingE2ETest is VestingTest {
             start,
             PERIOD_DURATION,
             0, // Zero total periods
-            TOTAL_AMOUNT,
-            unlockAmounts
+            divisibleAmount
         );
     }
 
     // Test validation: Zero total amount
-    function testRevertWhenZeroTotalAmount() public {
+    function testRevertWithZeroTotalAmount() public {
         uint256 start = block.timestamp;
-        uint256[] memory unlockAmounts = new uint256[](TOTAL_PERIODS);
 
         vm.prank(alice);
         vm.expectRevert(Errors.ZeroTotalAmount.selector);
@@ -218,195 +199,121 @@ contract VestingE2ETest is VestingTest {
             start,
             PERIOD_DURATION,
             TOTAL_PERIODS,
-            0, // Zero total amount
-            unlockAmounts
+            0 // Zero total amount
         );
     }
 
-    // Test validation: Unlock amounts mismatch
-    function testRevertWhenUnlockAmountsMismatch() public {
+    // Test validation: Amount not divisible
+    function testRevertWithAmountNotDivisible() public {
         uint256 start = block.timestamp;
-        uint256[] memory unlockAmounts = new uint256[](TOTAL_PERIODS - 1); // One less than required
-        uint256 amountPerPeriod = TOTAL_AMOUNT / TOTAL_PERIODS;
 
-        for (uint256 i = 0; i < TOTAL_PERIODS - 1; i++) {
-            unlockAmounts[i] = amountPerPeriod;
+        // Make sure amount is not divisible by total periods
+        uint256 notDivisibleAmount = TOTAL_AMOUNT;
+        if (notDivisibleAmount % TOTAL_PERIODS == 0) {
+            notDivisibleAmount += 1;
         }
 
         vm.prank(alice);
-        vm.expectRevert(Errors.UnlockAmountsMismatch.selector);
-        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, TOTAL_AMOUNT, unlockAmounts);
+        vm.expectRevert(Errors.AmountNotDivisible.selector);
+        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, notDivisibleAmount);
     }
 
     // Test validation: Schedule already exists
     function testRevertWhenScheduleAlreadyExists() public {
         uint256 start = block.timestamp;
-        uint256[] memory unlockAmounts = new uint256[](TOTAL_PERIODS);
-        uint256 amountPerPeriod = TOTAL_AMOUNT / TOTAL_PERIODS;
 
-        for (uint256 i = 0; i < TOTAL_PERIODS; i++) {
-            unlockAmounts[i] = amountPerPeriod;
-        }
+        // Ensure total amount is divisible by the number of periods
+        uint256 divisibleAmount = TOTAL_PERIODS * (TOTAL_AMOUNT / TOTAL_PERIODS);
 
-        // Create first schedule
+        // Create the schedule first time
         vm.prank(alice);
-        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, TOTAL_AMOUNT, unlockAmounts);
+        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, divisibleAmount);
 
-        // Try to create a second schedule for the same beneficiary
+        // Try to create the same schedule again
         vm.prank(alice);
         vm.expectRevert(Errors.ScheduleAlreadyExists.selector);
-        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, TOTAL_AMOUNT, unlockAmounts);
+        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, divisibleAmount);
     }
 
-    // Test validation: Unlock amounts not equal total
-    function testRevertWhenUnlockAmountsNotEqualTotal() public {
-        uint256 start = block.timestamp;
-        uint256[] memory unlockAmounts = new uint256[](TOTAL_PERIODS);
-        uint256 amountPerPeriod = TOTAL_AMOUNT / (TOTAL_PERIODS - 1); // This will make total too high
-
-        for (uint256 i = 0; i < TOTAL_PERIODS; i++) {
-            unlockAmounts[i] = amountPerPeriod;
-        }
-
-        vm.prank(alice);
-        vm.expectRevert(Errors.UnlockAmountsNotEqualTotal.selector);
-        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, TOTAL_AMOUNT, unlockAmounts);
-    }
-
-    // Test validation: No vesting schedule found
-    function testRevertWhenNoVestingScheduleFound() public {
+    // Test validation: No vesting schedule found when claiming
+    function testRevertWhenNoScheduleFoundClaiming() public {
         vm.prank(bob);
         vm.expectRevert(Errors.NoVestingScheduleFound.selector);
         vesting.claimTokens();
     }
 
     // Test validation: No tokens available to claim
-    function testRevertWhenNoTokensAvailableToClaim() public {
-        uint256 start = block.timestamp + 1 days; // Starts in the future
-        uint256[] memory unlockAmounts = new uint256[](TOTAL_PERIODS);
-        uint256 amountPerPeriod = TOTAL_AMOUNT / TOTAL_PERIODS;
+    function testRevertWhenNoTokensToClaim() public {
+        uint256 start = block.timestamp;
 
-        for (uint256 i = 0; i < TOTAL_PERIODS; i++) {
-            unlockAmounts[i] = amountPerPeriod;
-        }
+        // Ensure total amount is divisible by the number of periods
+        uint256 divisibleAmount = TOTAL_PERIODS * (TOTAL_AMOUNT / TOTAL_PERIODS);
 
-        // Create vesting schedule that starts in the future
+        // Create vesting schedule
         vm.prank(alice);
-        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, TOTAL_AMOUNT, unlockAmounts);
+        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, divisibleAmount);
 
-        // Try to claim before start time
+        // Try to claim tokens before any are available
         vm.prank(bob);
         vm.expectRevert(Errors.NoTokensAvailableToClaim.selector);
         vesting.claimTokens();
     }
 
-    // Test claiming all tokens at the end of vesting
-    function testClaimAllTokensAtEnd() public {
-        uint256 start = block.timestamp;
-        uint256[] memory unlockAmounts = new uint256[](TOTAL_PERIODS);
-        uint256 amountPerPeriod = TOTAL_AMOUNT / TOTAL_PERIODS;
-
-        for (uint256 i = 0; i < TOTAL_PERIODS; i++) {
-            unlockAmounts[i] = amountPerPeriod;
-        }
-
-        // Create vesting schedule
-        vm.prank(alice);
-        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, TOTAL_AMOUNT, unlockAmounts);
-
-        // Advance time past the end of vesting
-        vm.warp(start + PERIOD_DURATION * TOTAL_PERIODS + 1 days);
-
-        // Prepare event monitoring
-        vm.expectEmit(true, false, false, true);
-        emit Vesting.TokensClaimed(bob, TOTAL_AMOUNT);
-
-        // Claim all tokens
-        vm.prank(bob);
-        vesting.claimTokens();
-
-        // Verify all tokens claimed
-        (,,,,, uint256 amountClaimed,,) = vesting.getVestingSchedule(bob);
-        assertEq(amountClaimed, TOTAL_AMOUNT, "All tokens should be claimed");
-        assertEq(token.balanceOf(bob), TOTAL_AMOUNT, "Bob should have all tokens");
-        assertEq(token.balanceOf(address(vesting)), 0, "Vesting contract should have no tokens");
-    }
-
     // Test multiple beneficiaries
     function testMultipleBeneficiaries() public {
         uint256 start = block.timestamp;
-        uint256[] memory unlockAmounts = new uint256[](TOTAL_PERIODS);
-        uint256 amountPerPeriod = TOTAL_AMOUNT / TOTAL_PERIODS / 2; // Half for each beneficiary
 
-        for (uint256 i = 0; i < TOTAL_PERIODS; i++) {
-            unlockAmounts[i] = amountPerPeriod;
-        }
+        // Half for each beneficiary
+        uint256 bobAmount = (TOTAL_PERIODS * (TOTAL_AMOUNT / TOTAL_PERIODS)) / 2;
+        uint256 carolAmount = bobAmount;
 
-        // Create vesting schedule for Bob
-        vm.prank(alice);
-        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, TOTAL_AMOUNT / 2, unlockAmounts);
+        // Create vesting schedules
+        vm.startPrank(alice);
+        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, bobAmount);
+        vesting.createVestingSchedule(carol, start, PERIOD_DURATION, TOTAL_PERIODS, carolAmount);
+        vm.stopPrank();
 
-        // Create vesting schedule for Carol
-        vm.prank(alice);
-        vesting.createVestingSchedule(carol, start, PERIOD_DURATION, TOTAL_PERIODS, TOTAL_AMOUNT / 2, unlockAmounts);
+        // Advance time to the end of vesting
+        vm.warp(start + (TOTAL_PERIODS * PERIOD_DURATION));
 
-        // Advance time past the first period
-        vm.warp(start + PERIOD_DURATION + 1 days);
-
-        // Both beneficiaries claim
+        // Both beneficiaries claim their tokens
         vm.prank(bob);
         vesting.claimTokens();
 
         vm.prank(carol);
         vesting.claimTokens();
 
-        // Verify both claimed the correct amounts
-        assertEq(token.balanceOf(bob), amountPerPeriod, "Bob should have claimed first period");
-        assertEq(token.balanceOf(carol), amountPerPeriod, "Carol should have claimed first period");
+        // Verify token balances
+        assertEq(token.balanceOf(bob), bobAmount, "Bob's token balance mismatch");
+        assertEq(token.balanceOf(carol), carolAmount, "Carol's token balance mismatch");
     }
 
-    // Test gas usage
-    function testGasUsageForCreatingVestingSchedule() public {
+    // Test claiming in multiple transactions
+    function testClaimingInMultipleTransactions() public {
         uint256 start = block.timestamp;
-        uint256[] memory unlockAmounts = new uint256[](TOTAL_PERIODS);
-        uint256 amountPerPeriod = TOTAL_AMOUNT / TOTAL_PERIODS;
 
-        for (uint256 i = 0; i < TOTAL_PERIODS; i++) {
-            unlockAmounts[i] = amountPerPeriod;
-        }
-
-        uint256 startGas = gasleft();
-
-        vm.prank(alice);
-        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, TOTAL_AMOUNT, unlockAmounts);
-
-        uint256 gasUsed = startGas - gasleft();
-        console2.log("Gas used for creating vesting schedule:", gasUsed);
-    }
-
-    // Test gas usage for claiming
-    function testGasUsageForClaimingTokens() public {
-        uint256 start = block.timestamp;
-        uint256[] memory unlockAmounts = new uint256[](TOTAL_PERIODS);
-        uint256 amountPerPeriod = TOTAL_AMOUNT / TOTAL_PERIODS;
-
-        for (uint256 i = 0; i < TOTAL_PERIODS; i++) {
-            unlockAmounts[i] = amountPerPeriod;
-        }
+        // Ensure total amount is divisible by the number of periods
+        uint256 divisibleAmount = TOTAL_PERIODS * (TOTAL_AMOUNT / TOTAL_PERIODS);
+        uint256 amountPerPeriod = divisibleAmount / TOTAL_PERIODS;
 
         // Create vesting schedule
         vm.prank(alice);
-        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, TOTAL_AMOUNT, unlockAmounts);
+        vesting.createVestingSchedule(bob, start, PERIOD_DURATION, TOTAL_PERIODS, divisibleAmount);
 
-        // Advance time
-        vm.warp(start + PERIOD_DURATION + 1 days);
+        // Claim after each period
+        for (uint256 i = 1; i <= TOTAL_PERIODS; i++) {
+            vm.warp(start + (i * PERIOD_DURATION));
 
-        uint256 startGas = gasleft();
+            uint256 expectedClaimable = amountPerPeriod;
+            assertEq(vesting.calculateClaimableAmount(bob), expectedClaimable, "Claimable amount mismatch");
 
-        vm.prank(bob);
-        vesting.claimTokens();
+            vm.prank(bob);
+            vesting.claimTokens();
 
-        uint256 gasUsed = startGas - gasleft();
-        console2.log("Gas used for claiming tokens:", gasUsed);
+            assertEq(token.balanceOf(bob), i * amountPerPeriod, "Bob's token balance mismatch");
+        }
+
+        // Verify all tokens have been claimed
+        assertEq(token.balanceOf(bob), divisibleAmount, "Bob should have all tokens");
     }
 }

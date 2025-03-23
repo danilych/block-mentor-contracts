@@ -56,7 +56,6 @@ contract VestingFactory is Ownable {
      * @param _periodDuration Duration of each period in seconds
      * @param _totalPeriods Total number of periods
      * @param _totalAmount Total amount of tokens to be vested
-     * @param _unlockAmounts Array of amounts to unlock for each period
      * @return The address of the created vesting contract
      */
     function createVestingContractWithSchedule(
@@ -65,8 +64,7 @@ contract VestingFactory is Ownable {
         uint256 _start,
         uint256 _periodDuration,
         uint256 _totalPeriods,
-        uint256 _totalAmount,
-        uint256[] calldata _unlockAmounts
+        uint256 _totalAmount
     ) external returns (address) {
         // Create the vesting contract
         address vestingContractAddress = createVestingContract(_token);
@@ -76,9 +74,7 @@ contract VestingFactory is Ownable {
         IERC20(_token).approve(vestingContractAddress, _totalAmount);
 
         // Create the vesting schedule
-        vestingContract.createVestingSchedule(
-            _beneficiary, _start, _periodDuration, _totalPeriods, _totalAmount, _unlockAmounts
-        );
+        vestingContract.createVestingSchedule(_beneficiary, _start, _periodDuration, _totalPeriods, _totalAmount);
 
         emit VestingScheduleCreated(
             vestingContractAddress,

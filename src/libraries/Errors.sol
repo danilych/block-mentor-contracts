@@ -18,4 +18,5 @@ library Errors {
     error NoVestingScheduleFound();
     error NoTokensAvailableToClaim();
     error InvalidTokenContract();
+    error AmountNotDivisible();
 }

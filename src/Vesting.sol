@@ -17,7 +17,7 @@ contract Vesting is Ownable, ReentrancyGuard {
         uint256 totalPeriods; // Total number of periods
         uint256 totalAmount; // Total amount of tokens to be vested
         uint256 amountClaimed; // Amount of tokens already claimed
-        uint256[] unlockAmounts; // Amount to unlock for each period
+        uint256 amountPerPeriod; // Amount to unlock for each period
         bool initialized; // Whether the schedule is initialized
     }
 
@@ -47,28 +47,25 @@ contract Vesting is Ownable, ReentrancyGuard {
      * @param _periodDuration Duration of each period in seconds
      * @param _totalPeriods Total number of periods
      * @param _totalAmount Total amount of tokens to be vested
-     * @param _unlockAmounts Array of amounts to unlock for each period
      */
     function createVestingSchedule(
         address _beneficiary,
         uint256 _start,
         uint256 _periodDuration,
         uint256 _totalPeriods,
-        uint256 _totalAmount,
-        uint256[] calldata _unlockAmounts
+        uint256 _totalAmount
     ) external nonReentrant {
         if (_beneficiary == address(0)) revert Errors.ZeroAddress();
         if (_periodDuration == 0) revert Errors.ZeroPeriodDuration();
         if (_totalPeriods == 0) revert Errors.ZeroTotalPeriods();
         if (_totalAmount == 0) revert Errors.ZeroTotalAmount();
-        if (_unlockAmounts.length != _totalPeriods) revert Errors.UnlockAmountsMismatch();
         if (vestingSchedules[_beneficiary].initialized) revert Errors.ScheduleAlreadyExists();
 
-        uint256 totalUnlockAmount = 0;
-        for (uint256 i = 0; i < _unlockAmounts.length; i++) {
-            totalUnlockAmount += _unlockAmounts[i];
-        }
-        if (totalUnlockAmount != _totalAmount) revert Errors.UnlockAmountsNotEqualTotal();
+        // Calculate amount per period
+        uint256 amountPerPeriod = _totalAmount / _totalPeriods;
+
+        // Check that the amount divides evenly
+        if (amountPerPeriod * _totalPeriods != _totalAmount) revert Errors.AmountNotDivisible();
 
         // Transfer tokens from sender to this contract
         token.safeTransferFrom(msg.sender, address(this), _totalAmount);
@@ -80,7 +77,7 @@ contract Vesting is Ownable, ReentrancyGuard {
             totalPeriods: _totalPeriods,
             totalAmount: _totalAmount,
             amountClaimed: 0,
-            unlockAmounts: _unlockAmounts,
+            amountPerPeriod: amountPerPeriod,
             initialized: true
         });
 
@@ -110,11 +107,7 @@ contract Vesting is Ownable, ReentrancyGuard {
             return schedule.totalAmount - schedule.amountClaimed;
         }
 
-        uint256 vestedAmount = 0;
-        for (uint256 i = 0; i < completedPeriods; i++) {
-            vestedAmount += schedule.unlockAmounts[i];
-        }
-
+        uint256 vestedAmount = completedPeriods * schedule.amountPerPeriod;
         return vestedAmount - schedule.amountClaimed;
     }
 
@@ -151,7 +144,7 @@ contract Vesting is Ownable, ReentrancyGuard {
             uint256 totalPeriods,
             uint256 totalAmount,
             uint256 amountClaimed,
-            uint256[] memory unlockAmounts,
+            uint256 amountPerPeriod,
             bool initialized
         )
     {
@@ -163,7 +156,7 @@ contract Vesting is Ownable, ReentrancyGuard {
             schedule.totalPeriods,
             schedule.totalAmount,
             schedule.amountClaimed,
-            schedule.unlockAmounts,
+            schedule.amountPerPeriod,
             schedule.initialized
         );
     }
