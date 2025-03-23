@@ -1,5 +1,7 @@
 # Block Mentor Contracts
 
+**Integrated with VIA Labs for Cross-Chain Functionality**: Block Mentor leverages VIA Labs technology to enable seamless cross-chain operations for our smart contracts, allowing tokens to be bridged across multiple blockchain networks.
+
 Block Mentor is a suite of smart contracts for token creation and vesting management, built using Foundry. This project enables users to create standard ERC20 tokens, omnichain tokens with bridging capabilities, and flexible vesting schedules for token distribution.
 
 ## Overview
