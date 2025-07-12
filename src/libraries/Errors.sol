@@ -19,4 +19,11 @@ library Errors {
     error NoTokensAvailableToClaim();
     error InvalidTokenContract();
     error AmountNotDivisible();
+
+    // Presale errors
+    error SaleNotActive();
+    error SaleNotEnded();
+    error IncorrectETHSent();
+    error InsufficientTokensAvailable();
+    error NoFundsAvailable();
 }
